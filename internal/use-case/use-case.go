@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"strings"
 
 	"github.com/trunov/mediahub/internal/entities"
 	"github.com/trunov/mediahub/internal/processor"
+	"github.com/trunov/mediahub/internal/queue"
 	"github.com/trunov/mediahub/internal/transport/handler"
 )
 
@@ -21,20 +23,22 @@ type RedisStore interface {
 }
 
 type R2Storage interface {
-	Upload(ctx context.Context, key string, ext string, payload []byte) error
+	UploadWithHook(ctx context.Context, key string, ext string, payload []byte, onSuccess func()) error
 }
 
 type useCase struct {
 	storage      Storage
 	redismanager RedisStore
 	r2Storage    R2Storage
+	wqueue       *queue.Producer
 }
 
-func New(storage Storage, rm RedisStore, r2Storage R2Storage) *useCase {
+func New(storage Storage, rm RedisStore, r2Storage R2Storage, wqueue *queue.Producer) *useCase {
 	return &useCase{
 		storage:      storage,
 		redismanager: rm,
 		r2Storage:    r2Storage,
+		wqueue:       wqueue,
 	}
 }
 
@@ -49,7 +53,16 @@ func (c *useCase) UploadImage(ctx context.Context, file multipart.File, fh *mult
 	fmt.Println(width)
 	fmt.Println(height)
 
-	err = c.r2Storage.Upload(ctx, "sample3", fileType, originalData)
+	key := "pro_test"
+
+	err = c.r2Storage.UploadWithHook(ctx, key, fileType, originalData, func() {
+		c.wqueue.EnqueueConvert(ctx, queue.ConvertJob{
+			ObjectKey:   key,
+			ContentType: fileType,
+			Ext:         strings.ToLower(ext),
+			// WebPKey:   optional override; default is objectKey + ".webp"
+		})
+	})
 	if err != nil {
 		return img, err
 	}

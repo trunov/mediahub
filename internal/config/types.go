@@ -6,11 +6,12 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig `json:"server"`
-	Upload   UploadConfig `json:"upload"`
-	Database Database     `json:"database"`
-	Redis    RedisConfig  `json:"redis"`
-	R2       R2Config     `json:"r2"`
+	Server   ServerConfig     `json:"server"`
+	Upload   UploadConfig     `json:"upload"`
+	Database Database         `json:"database"`
+	Redis    RedisConfig      `json:"redis"`
+	R2       R2Config         `json:"r2"`
+	WebP     WebPWorkerConfig `json:"webp_worker"`
 }
 
 type ServerConfig struct {
@@ -52,4 +53,15 @@ type R2Config struct {
 	AccessKeyID string `json:"access_key_id"`
 	SecretKey   string `json:"secret_key"`
 	Endpoint    string `json:"endpoint"`
+}
+
+type WebPWorkerConfig struct {
+	Stream       string        `json:"stream"`        // redis stream name
+	Group        string        `json:"group"`         // consumer group name
+	Workers      int           `json:"workers"`       // number of concurrent goroutines
+	MaxAttempts  int           `json:"max_attempts"`  // max retries before DLQ
+	MaxLen       int64         `json:"max_len"`       // stream max length before trim
+	BackoffBase  time.Duration `json:"backoff_base"`  // base retry delay
+	BlockTimeout time.Duration `json:"block_timeout"` // XREADGROUP block timeout
+	Consumer     string        `json:"consumer"`
 }

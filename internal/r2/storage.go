@@ -25,6 +25,8 @@ type uploadReq struct {
 	key      string
 	fileType string
 	payload  []byte
+
+	onSuccess func()
 }
 
 type S3 struct {
@@ -102,13 +104,15 @@ func (s *S3) Close() {
 
 // Upload tries to put an upload on the queue without blocking.
 // If the queue is full, it returns ErrQueueFull immediately.
-func (s *S3) Upload(ctx context.Context, key string, fileType string, payload []byte) error {
-	req := uploadReq{ctx: ctx, key: key, payload: payload}
+func (s *S3) UploadWithHook(ctx context.Context, key string, fileType string, payload []byte, onSuccess func()) error {
+	req := uploadReq{ctx: ctx, key: key, fileType: fileType, payload: payload, onSuccess: onSuccess}
 	select {
 	case s.queue <- req:
-		return nil // queued successfully
+		return nil
 	case <-ctx.Done():
-		return ctx.Err() // caller canceled
+		return ctx.Err()
+	default:
+		return ErrQueueFull
 	}
 }
 
@@ -127,7 +131,9 @@ func (s *S3) worker() {
 				ContentType: aws.String(req.fileType),
 			})
 			if err == nil {
-				// success
+				if req.onSuccess != nil {
+					req.onSuccess() // cheap enough so synchronous
+				}
 				break
 			}
 
@@ -156,4 +162,22 @@ func (s *S3) backoffDelay(attempt int) time.Duration {
 	delay := s.RetryBaseDelay << (attempt - 1)
 	jitter := time.Duration(int64(delay) / 10)
 	return delay - (jitter / 2) + time.Duration(int64(jitter)*time.Now().UnixNano()%2)
+}
+
+func (s *S3) Download(ctx context.Context, key string) ([]byte, string, error) {
+	out, err := s.S3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.Bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to download %q: %w", key, err)
+	}
+	defer out.Body.Close()
+
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(out.Body); err != nil {
+		return nil, "", fmt.Errorf("failed to read body for %q: %w", key, err)
+	}
+
+	return buf.Bytes(), *out.ContentType, nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/trunov/mediahub/cmd/migrate"
 	"github.com/trunov/mediahub/internal/cache"
 	"github.com/trunov/mediahub/internal/config"
+	"github.com/trunov/mediahub/internal/queue"
 	"github.com/trunov/mediahub/internal/r2"
 	"github.com/trunov/mediahub/internal/redisholder"
 	"github.com/trunov/mediahub/internal/redismanager"
@@ -47,7 +48,9 @@ func New(cfg *config.Config) (*App, error) {
 
 	r2Storage := r2.NewStorage(&cfg.R2, redisCache)
 
-	uc := use_case.New(repo, rm, r2Storage)
+	webpProducer := queue.Init(ctx, rc, cfg.WebP, r2Storage)
+
+	uc := use_case.New(repo, rm, r2Storage, webpProducer)
 
 	h := handler.New(uc, cfg)
 	r := router.NewRouter(h)
