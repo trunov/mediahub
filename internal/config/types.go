@@ -12,6 +12,7 @@ type Config struct {
 	Redis    RedisConfig      `json:"redis"`
 	R2       R2Config         `json:"r2"`
 	WebP     WebPWorkerConfig `json:"webp_worker"`
+	Sentry   SentryConfig     `json:"sentry"`
 }
 
 type ServerConfig struct {
@@ -64,4 +65,9 @@ type WebPWorkerConfig struct {
 	BackoffBase  time.Duration `json:"backoff_base"`  // base retry delay
 	BlockTimeout time.Duration `json:"block_timeout"` // XREADGROUP block timeout
 	Consumer     string        `json:"consumer"`
+}
+
+type SentryConfig struct {
+	SentryDSN   string `json:"sentry_dsn"`
+	Environment string `json:"environment"`
 }
