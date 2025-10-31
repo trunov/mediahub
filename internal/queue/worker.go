@@ -12,11 +12,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/trunov/mediahub/internal/config"
-	"github.com/trunov/mediahub/internal/r2"
 	webp_converter "github.com/trunov/mediahub/internal/webp-converter"
 )
 
-// Storage is satisfied by your r2.S3 (has Upload + Download).
 type Storage interface {
 	Download(ctx context.Context, key string) ([]byte, string, error)
 	UploadWithHook(ctx context.Context, key, contentType string, payload []byte, onSuccess func()) error
@@ -31,10 +29,9 @@ type Worker struct {
 	cfg     config.WebPWorkerConfig
 	storage Storage
 	conv    WebPConverter
-	logf    func(string, ...any)
 }
 
-func Init(ctx context.Context, rc redis.UniversalClient, cfg config.WebPWorkerConfig, r2Storage *r2.S3) *Producer {
+func Init(ctx context.Context, rc redis.UniversalClient, cfg config.WebPWorkerConfig, r2Storage Storage) *Producer {
 	producer := NewProducer(rc, cfg.Stream, cfg.MaxLen)
 	worker := NewWorker(rc, cfg, r2Storage)
 
@@ -53,7 +50,6 @@ func NewWorker(rc redis.UniversalClient, cfg config.WebPWorkerConfig, storage St
 		cfg:     cfg,
 		storage: storage,
 		conv:    webp_converter.Converter{},
-		logf:    log.Printf,
 	}
 }
 
@@ -172,7 +168,6 @@ func (w *Worker) loop(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			w.logf("XReadGroup: %v", err)
 			continue
 		}
 		for _, s := range streams {
